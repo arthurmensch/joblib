@@ -54,7 +54,7 @@ class Hasher(Pickler):
         pickling.
     """
 
-    def __init__(self, hash_name='md5'):
+    def __init__(self, hash_name='md5', clean=None):
         self.stream = io.BytesIO()
         # By default we want a pickle protocol that only changes with
         # the major python version and not the minor one
@@ -63,6 +63,9 @@ class Hasher(Pickler):
         Pickler.__init__(self, self.stream, protocol=protocol)
         # Initialise the hash obj
         self._hash = hashlib.new(hash_name)
+        if clean is None:
+            clean = {}
+        self.clean = clean
 
     def hash(self, obj, return_digest=True):
         try:
@@ -92,6 +95,7 @@ class Hasher(Pickler):
             else:
                 cls = obj.__self__.__class__
                 obj = _MyHash(func_name, inst, cls)
+        if isinstance(obj, self.clean.keys()):
         Pickler.save(self, obj)
 
     def memoize(self, obj):
@@ -162,7 +166,7 @@ class NumpyHasher(Hasher):
     """ Special case the hasher for when numpy is loaded.
     """
 
-    def __init__(self, hash_name='md5', coerce_mmap=False):
+    def __init__(self, hash_name='md5', coerce_mmap=False, clean=None):
         """
             Parameters
             ----------
@@ -173,7 +177,7 @@ class NumpyHasher(Hasher):
                 objects.
         """
         self.coerce_mmap = coerce_mmap
-        Hasher.__init__(self, hash_name=hash_name)
+        Hasher.__init__(self, hash_name=hash_name, clean=clean)
         # delayed import of numpy, to avoid tight coupling
         import numpy as np
         self.np = np
@@ -243,7 +247,7 @@ class NumpyHasher(Hasher):
         Hasher.save(self, obj)
 
 
-def hash(obj, hash_name='md5', coerce_mmap=False):
+def hash(obj, hash_name='md5', coerce_mmap=False, clean=None):
     """ Quick calculation of a hash to identify uniquely Python objects
         containing numpy arrays.
 
@@ -257,7 +261,7 @@ def hash(obj, hash_name='md5', coerce_mmap=False):
             Make no difference between np.memmap and np.ndarray
     """
     if 'numpy' in sys.modules:
-        hasher = NumpyHasher(hash_name=hash_name, coerce_mmap=coerce_mmap)
+        hasher = NumpyHasher(hash_name=hash_name, coerce_mmap=coerce_mmap, clean=None)
     else:
-        hasher = Hasher(hash_name=hash_name)
+        hasher = Hasher(hash_name=hash_name, clean=clean)
     return hasher.hash(obj)

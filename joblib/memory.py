@@ -419,6 +419,7 @@ class MemorizedFunc(Logger):
     #-------------------------------------------------------------------------
 
     def __init__(self, func, cachedir, ignore=None, mmap_mode=None,
+                 clean=None,
                  compress=False, verbose=1, timestamp=None):
         """
             Parameters
@@ -450,6 +451,9 @@ class MemorizedFunc(Logger):
         self.func = func
         if ignore is None:
             ignore = []
+        if self.clean is None:
+            clean = {}
+        self.clean = clean
         self.ignore = ignore
 
         self._verbose = verbose
@@ -575,7 +579,8 @@ class MemorizedFunc(Logger):
     def _get_argument_hash(self, *args, **kwargs):
         return hashing.hash(filter_args(self.func, self.ignore,
                                          args, kwargs),
-                             coerce_mmap=(self.mmap_mode is not None))
+                             coerce_mmap=(self.mmap_mode is not None),
+                             clean=self.clean)
 
     def _get_output_dir(self, *args, **kwargs):
         """ Return the directory in which are persisted the result
@@ -897,6 +902,7 @@ class Memory(Logger):
             mkdirp(self.cachedir)
 
     def cache(self, func=None, ignore=None, verbose=None,
+              clean=None,
                         mmap_mode=False):
         """ Decorates the given function func to only compute its return
             value for input arguments not cached on disk.
@@ -939,6 +945,7 @@ class Memory(Logger):
         return MemorizedFunc(func, cachedir=self.cachedir,
                                    mmap_mode=mmap_mode,
                                    ignore=ignore,
+                                   clean=clean,
                                    compress=self.compress,
                                    verbose=verbose,
                                    timestamp=self.timestamp)
