@@ -24,6 +24,23 @@ else:
     Pickler = pickle.Pickler
 
 
+def _make_reducer(keyfunc):
+    def reduce(obj):
+        clean_obj = keyfunc(obj)
+        return clean_obj.__reduce__()
+    return reduce
+
+
+def _make_dispatch_table(keyfunc_table=None):
+    if keyfunc_table is None:
+        keyfunc_table = {}
+    dispatch_table = {}
+    for klass in keyfunc_table.keys():
+        reducer = _make_reducer(keyfunc_table[klass])
+        dispatch_table[klass] = reducer
+    return dispatch_table
+
+
 class _ConsistentSet(object):
     """ Class used to ensure the hash of Sets is preserved
         whatever the order of its items.
@@ -54,7 +71,7 @@ class Hasher(Pickler):
         pickling.
     """
 
-    def __init__(self, hash_name='md5', clean=None):
+    def __init__(self, hash_name='md5', keyfunc_table=None):
         self.stream = io.BytesIO()
         # By default we want a pickle protocol that only changes with
         # the major python version and not the minor one
@@ -63,9 +80,7 @@ class Hasher(Pickler):
         Pickler.__init__(self, self.stream, protocol=protocol)
         # Initialise the hash obj
         self._hash = hashlib.new(hash_name)
-        if clean is None:
-            clean = {}
-        self.clean = clean
+        self.dispatch_table = _make_dispatch_table(keyfunc_table)
 
     def hash(self, obj, return_digest=True):
         try:
@@ -95,7 +110,6 @@ class Hasher(Pickler):
             else:
                 cls = obj.__self__.__class__
                 obj = _MyHash(func_name, inst, cls)
-        if isinstance(obj, self.clean.keys()):
         Pickler.save(self, obj)
 
     def memoize(self, obj):
@@ -166,7 +180,7 @@ class NumpyHasher(Hasher):
     """ Special case the hasher for when numpy is loaded.
     """
 
-    def __init__(self, hash_name='md5', coerce_mmap=False, clean=None):
+    def __init__(self, hash_name='md5', coerce_mmap=False, keyfunc_table=None):
         """
             Parameters
             ----------
@@ -177,7 +191,7 @@ class NumpyHasher(Hasher):
                 objects.
         """
         self.coerce_mmap = coerce_mmap
-        Hasher.__init__(self, hash_name=hash_name, clean=clean)
+        Hasher.__init__(self, hash_name=hash_name, keyfunc_table=keyfunc_table)
         # delayed import of numpy, to avoid tight coupling
         import numpy as np
         self.np = np
@@ -247,7 +261,7 @@ class NumpyHasher(Hasher):
         Hasher.save(self, obj)
 
 
-def hash(obj, hash_name='md5', coerce_mmap=False, clean=None):
+def hash(obj, hash_name='md5', coerce_mmap=False, keyfunc_table=None):
     """ Quick calculation of a hash to identify uniquely Python objects
         containing numpy arrays.
 
@@ -261,7 +275,8 @@ def hash(obj, hash_name='md5', coerce_mmap=False, clean=None):
             Make no difference between np.memmap and np.ndarray
     """
     if 'numpy' in sys.modules:
-        hasher = NumpyHasher(hash_name=hash_name, coerce_mmap=coerce_mmap, clean=None)
+        hasher = NumpyHasher(hash_name=hash_name, coerce_mmap=coerce_mmap,
+                             keyfunc_table=keyfunc_table)
     else:
-        hasher = Hasher(hash_name=hash_name, clean=clean)
+        hasher = Hasher(hash_name=hash_name, keyfunc_table=keyfunc_table)
     return hasher.hash(obj)

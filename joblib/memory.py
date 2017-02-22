@@ -419,7 +419,7 @@ class MemorizedFunc(Logger):
     #-------------------------------------------------------------------------
 
     def __init__(self, func, cachedir, ignore=None, mmap_mode=None,
-                 clean=None,
+                 keyfunc_table=None,
                  compress=False, verbose=1, timestamp=None):
         """
             Parameters
@@ -451,9 +451,7 @@ class MemorizedFunc(Logger):
         self.func = func
         if ignore is None:
             ignore = []
-        if self.clean is None:
-            clean = {}
-        self.clean = clean
+        self.keyfunc_table = keyfunc_table
         self.ignore = ignore
 
         self._verbose = verbose
@@ -570,7 +568,8 @@ class MemorizedFunc(Logger):
             In addition, when unpickling, we run the __init__
         """
         return (self.__class__, (self.func, self.cachedir, self.ignore,
-                self.mmap_mode, self.compress, self._verbose))
+                                 self.mmap_mode, self.keyfunc_table,
+                                 self.compress, self._verbose))
 
     #-------------------------------------------------------------------------
     # Private interface
@@ -578,9 +577,9 @@ class MemorizedFunc(Logger):
 
     def _get_argument_hash(self, *args, **kwargs):
         return hashing.hash(filter_args(self.func, self.ignore,
-                                         args, kwargs),
-                             coerce_mmap=(self.mmap_mode is not None),
-                             clean=self.clean)
+                                        args, kwargs),
+                            coerce_mmap=(self.mmap_mode is not None),
+                            keyfunc_table=self.keyfunc_table)
 
     def _get_output_dir(self, *args, **kwargs):
         """ Return the directory in which are persisted the result
@@ -683,7 +682,7 @@ class MemorizedFunc(Logger):
         if old_first_line == first_line == -1 or func_name == '<lambda>':
             if not first_line == -1:
                 func_description = '%s (%s:%i)' % (func_name,
-                                                source_file, first_line)
+                                                   source_file, first_line)
             else:
                 func_description = func_name
             warnings.warn(JobLibCollisionWarning(
@@ -902,8 +901,7 @@ class Memory(Logger):
             mkdirp(self.cachedir)
 
     def cache(self, func=None, ignore=None, verbose=None,
-              clean=None,
-                        mmap_mode=False):
+              keyfunc_table=None, mmap_mode=False):
         """ Decorates the given function func to only compute its return
             value for input arguments not cached on disk.
 
@@ -943,12 +941,12 @@ class Memory(Logger):
         if isinstance(func, MemorizedFunc):
             func = func.func
         return MemorizedFunc(func, cachedir=self.cachedir,
-                                   mmap_mode=mmap_mode,
-                                   ignore=ignore,
-                                   clean=clean,
-                                   compress=self.compress,
-                                   verbose=verbose,
-                                   timestamp=self.timestamp)
+                             mmap_mode=mmap_mode,
+                             ignore=ignore,
+                             keyfunc_table=keyfunc_table,
+                             compress=self.compress,
+                             verbose=verbose,
+                             timestamp=self.timestamp)
 
     def clear(self, warn=True):
         """ Erase the complete cache directory.
